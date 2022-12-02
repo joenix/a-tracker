@@ -1,8 +1,8 @@
 {
-  "name": "a-tracker",
-  "version": "1.0.1",
-  "main": "index.js",
-  "repository": "https://github.com/joenix/a-tracker.git",
-  "author": "Joenix <joenix.com@gmail.com>",
-  "license": "MIT"
+    "name": "a-tracker",
+    "version": "1.0.2",
+    "main": "index.js",
+    "repository": "https://github.com/joenix/a-tracker.git",
+    "author": "Joenix <joenix.com@gmail.com>",
+    "license": "MIT"
 }
