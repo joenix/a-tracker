@@ -1,16 +1,20 @@
-let initFlag = false; // 初始化完成标记
-let mtrDebug = false; // 选填，默认为 false
-let logTag = '[mTracker]';
-let bizScenario = ''; // 必填，渠道来源
-let id = ''; // mpaas小程序必填
-let mustKeys = ['seedId', 'actionId']; // remoteLog 必传参数
-let _extParams = {};
+// Init Completed
+let completed = false;
 
-/**
- * track('clickseedname', { bizType: 'Pay', ext: { productId: 'xxx' } })
- */
+// Debug Mode
+let mtrDebug = false;
 
-const paramsType = {
+// Applet ID
+let id = '';
+
+// Channel
+let bizScenario = '';
+
+// Generally Params
+let extParams = {};
+
+// Params Types
+let paramsType = {
     type: 'string',
     seedId: 'string',
     bizType: 'string',
@@ -23,154 +27,174 @@ const paramsType = {
     param4: 'string'
 };
 
-function logParamsCheck(options) {
-    for (let i = 0; i < mustKeys.length; i++) {
-        if (!options[mustKeys[i]]) {
-            console.warn(`[mas] ${mustKeys[i]}不能为空`);
-            return true;
+// Keys for Remote
+let keys = ['seedId', 'actionId'];
+
+// Foreach
+function foreach(json = {}, callback = () => {}, clone = true) {
+    const cache = clone ? {} : json;
+
+    for (let k in json) {
+        cache[k] = callback(json[k], k) || json[k];
+    }
+
+    return cache;
+}
+
+// Keys Checking
+function keysChecking(opts = {}) {
+    for (let key of keys) {
+        if (!opts[key]) {
+            return console.log(`[MAS] ${key} 不能为空`), true;
         }
     }
 }
 
-function jsBridgeReady(callback) {
-    // 如果 jsbridge 已经注入则直接调用
-    if (window.AlipayJSBridge) {
-        callback && callback();
-    } else {
-        // 如果没有注入则监听注入的事件
-        document.addEventListener('AlipayJSBridgeReady', callback, false);
-    }
+// JS Bridge
+function jsBridgeReady(callback = () => {}) {
+    window.AlipayJSBridge ? callback() : document.addEventListener('AlipayJSBridgeReady', callback, false);
 }
 
-// 同神策api
+// Sync API for 神策
 function track(eventId, eventData = {}) {
-    let _evtData = {
-        ext: {}
-    };
-    Object.keys(eventData).forEach((key) => {
-        if (paramsType[key]) {
-            _evtData[key] = eventData[key];
-        } else {
-            _evtData.ext[key] = eventData[key];
-        }
+    let eventSource = { ext: {} };
+
+    foreach(eventData, (key) => {
+        (paramsType[key] ? eventSource : eventSource.ext)[key] = eventData[key];
     });
 
-    sendLog(eventId, _evtData);
+    sender(eventId, eventSource);
 }
 
-/**
- * sendLog('payclick', { actionId: 'click', bizType: 'alipay', ext: {a: 1, b: 2} })
- * @param {*} eventId
- * @param {*} eventData
- * @returns
- */
-function sendLog(eventId, eventData = {}) {
+// Sender
+function sender(eventId, eventData = {}) {
     if (!eventId) {
-        console.warn(`[mas] eventId 不能为空`);
-        return;
+        return console.warn(`[MAS] eventId 不能为空`);
     }
-    var { ext = {}, actionId, bizType } = options;
+
+    let { ext = {}, actionId, bizType } = eventData;
+
     if (!actionId) {
-        console.warn(`[mas] actionId 不能为空`);
-        // return
+        console.warn(`[MAS] actionId 不能为空`);
     }
-    let options = {};
-    Object.keys(eventData).forEach((key) => {
+
+    let opts = {};
+
+    foreach(eventData, (key) => {
         if (paramsType[key] && paramsType[key] === typeof eventData[key]) {
-            options[key] = eventData[key];
+            opts[key] = eventData[key];
         }
     });
-    _remoteLog({
-        ...options,
+
+    remoter({
+        ...opts,
+
         seedId: eventId,
         actionId,
         bizType,
-        param4: _formatExtParams(Object.assign(_extParams, ext))
+
+        param4: extParamsFormatter(Object.assign(extParams, ext))
     });
 }
 
-function _remoteLog(options) {
-    let apiObj = options;
-    // Object.assign(apiObj, options);
-
+// Remoter
+function remoter(opts = {}) {
     if (mtrDebug) {
-        console.log(logTag, 'remoteLog', apiObj);
+        console.log('[mTracker]', 'Remote Log: ', opts);
     }
+
     // #ifdef H5
-    jsBridgeReady(function () {
-        AlipayJSBridge.call('remoteLog', apiObj);
-    });
+    jsBridgeReady(() => AlipayJSBridge.call('Remote Log: ', opts));
     // #endif
+
     // #ifdef MP-ALIPAY
-    my.call('remoteLog', apiObj);
+    my.call('Remote Log: ', opts);
     // #endif
 }
 
-function _formatExtParams(t) {
-    let n = [];
-    bizScenario && n.push('mBizScenario='.concat(encodeStr(bizScenario)));
+// extParams Formatter
+function extParamsFormatter(json = {}, nes = []) {
+    bizScenario && nes.push('mBizScenario='.concat(encode(bizScenario)));
+
     // #ifdef MP-ALIPAY
-    n.push('id='.concat(encodeStr(id)));
+    nes.push('id='.concat(encode(id)));
     // #endif
-    Object.keys(t).forEach(function (e) {
-        n.push(''.concat(e, '=').concat(encodeStr(t[e])));
+
+    foreach(json, (e) => {
+        nes.push(''.concat(e, '=').concat(encode(json[e])));
     });
-    return n.join(',');
+
+    return nes.join(',');
 }
 
-function encodeStr(e) {
-    return 'string' == typeof e
-        ? e.replace(/=|,|\^|\$\$/g, function (e) {
-              switch (e) {
-                  case ',':
-                      return '%2C';
-                  case '^':
-                      return '%5E';
-                  case '$$':
-                      return '%24%24';
-                  case '=':
-                      return '%3D';
-                  case '&&':
-                      return '%26%26';
-                  default:
-                      return ' ';
-              }
-          })
-        : e;
+// Encode
+function encode(e) {
+    if ('string' == typeof e) {
+        return e.replace(/=|,|\^|\$\$/g, (e) => {
+            switch (e) {
+                case ',':
+                    return '%2C';
+                case '^':
+                    return '%5E';
+                case '$$':
+                    return '%24%24';
+                case '=':
+                    return '%3D';
+                case '&&':
+                    return '%26%26';
+                default:
+                    return ' ';
+            }
+        });
+    }
+
+    return e;
 }
 
+// Export Usage
 export default {
-    install: (Vue) => {
-        if (!initFlag) {
-            console.warn('[mas] 请先执行埋点初始化方法init');
-            return;
+    install(Vue) {
+        // No Init
+        if (!completed) {
+            return console.warn('[MAS] 请优先执行 init 初始化');
         }
-        Vue.prototype.$track = function (eventId, options) {
-            sendLog(eventId, options);
-        };
+
+        // Extension API on Vue 2
+        Vue.prototype.$track = sender;
     },
+
+    /**
+     * @param mtrDebug { boolean } - Debug Mode
+     * @param id { number } - Applet ID
+     * @param bizScenario { string } - Channel
+     * @param extendParams { object } - Generally Params
+     * ========== ========== ========== ========== ==========
+     */
     init(conf = {}) {
-        // conf: mtrDebug, bizScenario, id
-        if (typeof conf.mtrDebug === 'boolean') mtrDebug = conf.mtrDebug;
+        if (typeof conf.mtrDebug == 'boolean') {
+            mtrDebug = conf.mtrDebug;
+        }
+
         // #ifdef MP-ALIPAY
         if (conf.id) {
-            if (/^\d{16}$/.test(conf.id)) {
-                id = conf.id;
-            } else {
-                console.warn('[mas] 小程序id不能为空');
-                return;
+            if (!/^\d{16}$/.test(conf.id)) {
+                return console.warn('[MAS] 小程序id不能为空');
             }
+            id = conf.id;
         }
         // #endif
+
         if (conf.extendParams) {
-            if (typeof conf.extendParams === 'object') {
-                _extParams = conf.extendParams;
-            } else {
-                console.warn('[mas] extendParams 格式错误');
-            }
+            typeof conf.extendParams === 'object' ? (extParams = conf.extParams) : console.warn('[MAS] extendParams 格式错误');
         }
+
         bizScenario = conf.bizScenario;
 
-        initFlag = true;
+        // Extend by Joenix
+        if (conf.paramsType) {
+            paramsType = conf.paramsType;
+        }
+
+        completed = true;
     }
 };
