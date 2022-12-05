@@ -33,13 +33,15 @@ function logParamsCheck(options) {
 }
 
 function jsBridgeReady(callback) {
-    // 如果 jsbridge 已经注入则直接调用
-    if (window.AlipayJSBridge) {
-        callback && callback();
-    } else {
+    // #ifdef H5
+    if (typeof AlipayJSBridge === 'undefined' && typeof document !== 'undefined') {
         // 如果没有注入则监听注入的事件
-        document.addEventListener('AlipayJSBridgeReady', callback, false);
+        return document.addEventListener('AlipayJSBridgeReady', callback, false);
     }
+
+    // 如果 jsbridge 已经注入则直接调用
+    callback && callback();
+    // #endif
 }
 
 // 同神策api
