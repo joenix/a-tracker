@@ -34,9 +34,12 @@ function logParamsCheck(options) {
 
 function jsBridgeReady(callback) {
     // #ifdef H5
-    if (typeof AlipayJSBridge === 'undefined' && typeof document !== 'undefined') {
-        // 如果没有注入则监听注入的事件
-        return document.addEventListener('AlipayJSBridgeReady', callback, false);
+    if (typeof AlipayJSBridge === 'undefined') {
+        if (typeof document !== 'undefined') {
+            // 如果没有注入则监听注入的事件
+            document.addEventListener('AlipayJSBridgeReady', callback, false);
+        }
+        return;
     }
 
     // 如果 jsbridge 已经注入则直接调用
